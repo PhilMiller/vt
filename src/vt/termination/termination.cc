@@ -434,18 +434,14 @@ bool TerminationDetector::propagateEpoch(TermStateType& state) {
 
               // debug additional infos
               auto const& current  = state.getEpoch();
-              bool const is_rooted = epoch::EpochManip::isRooted(current);
-              bool const has_categ = epoch::EpochManip::hasCategory(current);
-              bool const useDS = has_categ
-                and epoch::EpochManip::category(current) ==
-                    epoch::eEpochCategory::DijkstraScholtenEpoch;
 
               auto f1 = fmt::format(
                 "{}Termination hang detected:{} {}traversals={} epoch={:x} "
-                "produced={}{} {}consumed={}{} rooted={}, ds={}\n",
+                "produced={}{} {}consumed={}{} rooted={}, ds={}, dep={}\n",
                 bred, reset,
                 magenta, state.constant_count, state.getEpoch(), state.g_prod1,
-                reset, magenta, state.g_cons1, reset, is_rooted, useDS
+                reset, magenta, state.g_cons1, reset, isRooted(current),
+                isDS(current), isDep(current)
               );
               vt_print(term, "{}", f1);
               state.num_print_constant++;
