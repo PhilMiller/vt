@@ -544,6 +544,9 @@ void TerminationDetector::epochTerminated(EpochType const& epoch) {
 
   // Update the window for the epoch archetype
   updateResolvedEpochs(epoch);
+
+  // Cleanup expanded released epoch state
+  cleanupReleasedEpoch(epoch);
 }
 
 void TerminationDetector::inquireTerminated(
@@ -725,13 +728,17 @@ void TerminationDetector::finishedEpoch(EpochType const& epoch) {
   );
 }
 
-EpochType TerminationDetector::makeEpochRootedWave(bool child, EpochType parent) {
-  auto const epoch = epoch::EpochManip::makeNewRootedEpoch();
+EpochType TerminationDetector::makeEpochRootedWave(
+  bool child, EpochType parent, bool is_dep
+) {
+  auto const dep = epoch::eEpochCategory::DependentEpoch;
+  auto const cat = is_dep ? dep : epoch::eEpochCategory::NoCategoryEpoch;
+  auto const epoch = epoch::EpochManip::makeNewRootedEpoch(false, cat);
 
   debug_print(
     term, node,
-    "makeEpochRootedWave: root={}, child={}, epoch={:x}, parent={:x}\n",
-    theContext()->getNode(), child, epoch, parent
+    "makeEpochRootedWave: root={}, child={}, epoch={:x}, parent={:x}, is_dep={}\n",
+    theContext()->getNode(), child, epoch, parent, is_dep
   );
 
   /*
@@ -755,9 +762,13 @@ EpochType TerminationDetector::makeEpochRootedWave(bool child, EpochType parent)
 
 }
 
-EpochType TerminationDetector::makeEpochRootedDS(bool child, EpochType parent) {
-  auto const ds_cat = epoch::eEpochCategory::DijkstraScholtenEpoch;
-  auto const epoch = epoch::EpochManip::makeNewRootedEpoch(false, ds_cat);
+EpochType TerminationDetector::makeEpochRootedDS(
+  bool child, EpochType parent, bool is_dep
+) {
+  auto const dep = epoch::eEpochCategory::DependentEpoch;
+  auto const ds  = epoch::eEpochCategory::DijkstraScholtenEpoch;
+  auto const cat = is_dep ? epoch::EpochManip::makeCat(dep, ds) : ds;
+  auto const epoch = epoch::EpochManip::makeNewRootedEpoch(false, cat);
 
   vtAssert(term_.find(epoch) == term_.end(), "New epoch must not exist");
 
@@ -772,15 +783,15 @@ EpochType TerminationDetector::makeEpochRootedDS(bool child, EpochType parent) {
 
   debug_print(
     term, node,
-    "makeEpochRootedDS: child={}, parent={:x}, epoch={:x}\n",
-    child, parent, epoch
+    "makeEpochRootedDS: child={}, parent={:x}, epoch={:x}, is_dep={}\n",
+    child, parent, epoch, is_dep
   );
 
   return epoch;
 }
 
 EpochType TerminationDetector::makeEpochRooted(
-  bool useDS, bool child, EpochType parent
+  bool useDS, bool child, EpochType parent, bool is_dep
 ) {
   /*
    *  This method should only be called by the root node for the rooted epoch
@@ -790,8 +801,8 @@ EpochType TerminationDetector::makeEpochRooted(
 
   debug_print(
     term, node,
-    "makeEpochRooted: root={}, is_ds={}, child={}, parent={:x}\n",
-    theContext()->getNode(), useDS, child, parent
+    "makeEpochRooted: root={}, is_ds={}, is_dep={}, child={}, parent={:x}\n",
+    theContext()->getNode(), useDS, is_dep, child, parent
   );
 
   bool const force_use_ds = vt::arguments::ArgConfig::vt_term_rooted_use_ds;
@@ -801,21 +812,24 @@ EpochType TerminationDetector::makeEpochRooted(
   vtAssertExpr(not (force_use_ds and force_use_wave));
 
   if ((useDS or force_use_ds) and not force_use_wave) {
-    return makeEpochRootedDS(child,parent);
+    return makeEpochRootedDS(child,parent,is_dep);
   } else {
-    return makeEpochRootedWave(child,parent);
+    return makeEpochRootedWave(child,parent,is_dep);
   }
 }
 
 EpochType TerminationDetector::makeEpochCollective(
-  bool child, EpochType parent
+  bool child, EpochType parent, bool is_dep
 ) {
-  auto const epoch = epoch::EpochManip::makeNewEpoch();
+  auto const dep   = epoch::eEpochCategory::DependentEpoch;
+  auto const cat   = is_dep ? dep : epoch::eEpochCategory::NoCategoryEpoch;
+  auto const node  = epoch::default_epoch_node;
+  auto const epoch = epoch::EpochManip::makeNewEpoch(false, node, false, cat);
 
   debug_print(
     term, node,
-    "makeEpochCollective: epoch={:x}, child={}, parent={:x}\n",
-    epoch, child, parent
+    "makeEpochCollective: epoch={:x}, child={}, parent={:x}, is_dep={}\n",
+    epoch, child, parent, is_dep
   );
 
   getWindow(epoch)->addEpoch(epoch);
@@ -830,11 +844,138 @@ EpochType TerminationDetector::makeEpochCollective(
 }
 
 EpochType TerminationDetector::makeEpoch(
-  bool is_coll, bool useDS, bool child, EpochType parent
+  bool is_coll, bool useDS, bool child, EpochType parent, bool is_dep
 ) {
   return is_coll ?
-    makeEpochCollective(child,parent) :
-    makeEpochRooted(useDS,child,parent);
+    makeEpochCollective(child,parent,is_dep) :
+    makeEpochRooted(useDS,child,parent,is_dep);
+}
+
+EpochType TerminationDetector::makeEpochRootedDep(
+  bool useDS, bool child, EpochType parent
+) {
+  return makeEpochRooted(useDS,child,parent,true);
+}
+
+EpochType TerminationDetector::makeEpochCollectiveDep(
+  bool child, EpochType parent
+) {
+  return makeEpochCollective(child,parent,true);
+}
+
+void TerminationDetector::releaseEpoch(EpochType epoch) {
+  bool const is_dep = isDep(epoch);
+
+  if (is_dep) {
+    // Put the epoch in the released set, which is not conclusive due to
+    // parentage, which effects the status. An epoch is *released* iff the epoch
+    // is in the released set and all parents are *released* (or there are no
+    // parents). The epoch any_epoch_sentinel does not count as a parent.
+    epoch_released_.insert(epoch);
+
+    bool const is_released = epochReleased(epoch);
+    if (is_released) {
+      runReleaseEpochActions(epoch);
+    } else {
+      // Enqueue continuations to potentially release this epoch since the
+      // child-parent graph is not inverted (one-way knowledge)
+      auto const& parents = getParents(epoch);
+      vtAssert(parents.size() > 0, "Must have unreleased parents in this case");
+      for (auto&& parent : parents) {
+        if (not epochReleased(parent)) {
+          onReleaseEpoch(parent, [epoch]{ theTerm()->releaseEpoch(epoch); });
+        }
+      }
+    }
+  } else {
+    // The user might have made a mistake if they are trying to release an epoch
+    // that is released-by-default (not dependent)
+    vtWarn("Trying to release non-dependent epoch");
+  }
+}
+
+void TerminationDetector::runReleaseEpochActions(EpochType epoch) {
+  auto iter = epoch_release_action_.find(epoch);
+  if (iter != epoch_release_action_.end()) {
+    auto actions = std::move(iter->second);
+    epoch_release_action_.erase(iter);
+    for (auto&& fn : actions) {
+      fn();
+    }
+  }
+  theMsg()->releaseEpochMsgs(epoch);
+}
+
+void TerminationDetector::onReleaseEpoch(EpochType epoch, ActionType action) {
+  // Run an action if an epoch has been released
+  bool const is_dep = isDep(epoch);
+  if (not is_dep or (is_dep and epochReleased(epoch))) {
+    action();
+  } else {
+    epoch_release_action_[epoch].push_back(action);
+  }
+}
+
+bool TerminationDetector::epochParentReleased(EpochType epoch) {
+  //  Test of all parents of a given epoch are released
+  bool released = true;
+  auto const& parents = getParents(epoch);
+  if (parents.size() != 0) {
+    for (auto&& parent : parents) {
+      released &= epochReleased(parent);
+    }
+  }
+  return released;
+}
+
+bool TerminationDetector::epochReleased(EpochType epoch) {
+  // Because of case (2), ignore dep <- no-dep because this should not be called
+  // unless dep is released
+  bool const is_dep = isDep(epoch);
+  if (not is_dep) {
+    return true;
+  }
+
+  // Terminated epochs are always released
+  bool const is_term = getWindow(epoch)->isTerminated(epoch);
+  if (is_term) {
+    return true;
+  }
+
+  // All parents must be released for an epoch to be released even if its in the
+  // release set. Epochs are put in the release set early as to reduce tracking
+  // of epoch "release chains"
+  bool const is_parent_released = epochParentReleased(epoch);
+  if (not is_parent_released) {
+    return false;
+  }
+
+  // Check the release set
+  auto iter = epoch_released_.find(epoch);
+  return iter != epoch_released_.end();
+}
+
+TerminationDetector::ParentBagType const&
+TerminationDetector::getParents(EpochType epoch) {
+  if (isDS(epoch)) {
+    return getDSTerm(epoch)->getParents();
+  } else {
+    auto& state = findOrCreateState(epoch, false);
+    return state.getParents();
+  }
+}
+
+void TerminationDetector::cleanupReleasedEpoch(EpochType epoch) {
+  bool const is_dep = isDep(epoch);
+  if (is_dep) {
+    bool const is_term = getWindow(epoch)->isTerminated(epoch);
+    if (is_term) {
+      auto iter = epoch_released_.find(epoch);
+      if (iter != epoch_released_.end()) {
+        epoch_released_.erase(iter);
+      }
+    }
+  }
 }
 
 void TerminationDetector::activateEpoch(EpochType const& epoch) {

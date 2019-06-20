@@ -123,6 +123,7 @@ struct ActiveMessenger {
   using ContainerPendingType = std::unordered_map<TagType,PendingRecvType>;
   using MsgContType          = std::list<BufferedMsgType>;
   using ContWaitType         = std::unordered_map<HandlerType, MsgContType>;
+  using EpochWaitType        = std::unordered_map<EpochType, MsgContType>;
   using ReadyHanTagType      = std::tuple<HandlerType, TagType>;
   using MaybeReadyType       = std::vector<ReadyHanTagType>;
   using HandlerManagerType   = HandlerManager;
@@ -574,6 +575,11 @@ struct ActiveMessenger {
     send_listen_.clear();
   }
 
+  /*
+   * Deliver messages that are now released with a dependent epoch
+   */
+  void releaseEpochMsgs(EpochType epoch);
+
 private:
   using EpochStackSizeType = typename EpochStackType::size_type;
 
@@ -595,6 +601,7 @@ private:
   EpochType global_epoch_                = no_epoch;
   MaybeReadyType maybe_ready_tag_han_    = {};
   ContWaitType pending_handler_msgs_     = {};
+  EpochWaitType pending_epoch_msgs_      = {};
   ContainerPendingType pending_recvs_    = {};
   TagType cur_direct_buffer_tag_         = starting_direct_buffer_tag;
   EpochStackType epoch_stack_;
