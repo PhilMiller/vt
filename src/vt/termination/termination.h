@@ -99,8 +99,13 @@ struct TerminationDetector :
 
   friend struct ds::StateDS;
 
-  bool isRooted(EpochType epoch);
-  bool isDS(EpochType epoch);
+  /*
+   * Test different types of epochs
+   */
+  bool isRooted(EpochType epoch) const;
+  bool isDS(EpochType epoch) const;
+  bool isDep(EpochType epoch) const;
+
   TermStateDSType* getDSTerm(EpochType epoch, bool is_root = false);
 
   void resetGlobalTerm();
