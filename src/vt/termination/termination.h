@@ -107,6 +107,7 @@ struct TerminationDetector :
   bool isRooted(EpochType epoch) const;
   bool isDS(EpochType epoch) const;
   bool isDep(EpochType epoch) const;
+  bool isTerm(EpochType epoch);
 
   TermStateDSType* getDSTerm(EpochType epoch, bool is_root = false);
 
