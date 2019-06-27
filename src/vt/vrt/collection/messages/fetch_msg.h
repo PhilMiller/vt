@@ -2,7 +2,7 @@
 //@HEADER
 // ************************************************************************
 //
-//                      proxy_objgroup_elm.h
+//                          fetch_msg.h
 //                     vt (Virtual Transport)
 //                  Copyright (C) 2018 NTESS, LLC
 //
@@ -42,68 +42,23 @@
 //@HEADER
 */
 
-#if !defined INCLUDED_VT_OBJGROUP_PROXY_PROXY_OBJGROUP_ELM_H
-#define INCLUDED_VT_OBJGROUP_PROXY_PROXY_OBJGROUP_ELM_H
+#if !defined INCLUDED_VT_VRT_COLLECTION_MESSAGES_FETCH_MSG_H
+#define INCLUDED_VT_VRT_COLLECTION_MESSAGES_FETCH_MSG_H
 
 #include "vt/config.h"
-#include "vt/objgroup/common.h"
-#include "vt/objgroup/proxy/proxy_bits.h"
-#include "vt/objgroup/active_func/active_func.h"
-#include "vt/messaging/message/smart_ptr.h"
+#include "vt/messaging/message/message.h"
+#include "vt/vrt/collection/proxy.h"
+#include "vt/vrt/vrt_common.h"
 
-namespace vt { namespace objgroup { namespace proxy {
+namespace vt { namespace vrt { namespace collection {
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-static struct ObjGroupReconstructTagType { } ObjGroupReconstructTag { };
-#pragma GCC diagnostic pop
+template <typename ColT>
+using RoutedMessageType = LocationRoutedMsg<VirtualElmProxyType<ColT>, Message>;
 
-template <typename ObjT>
-struct ProxyElm {
-
-  ProxyElm() = default;
-  ProxyElm(ProxyElm const&) = default;
-  ProxyElm(ProxyElm&&) = default;
-  ProxyElm& operator=(ProxyElm const&) = default;
-
-  ProxyElm(ObjGroupProxyType in_proxy, NodeType in_node)
-    : proxy_(in_proxy), node_(in_node)
-  { }
-
-  /*
-   * Send a msg an object in this group with a handler
-   */
-  template <typename MsgT, ActiveObjType<MsgT, ObjT> fn>
-  void send(MsgT* msg) const;
-  template <typename MsgT, ActiveObjType<MsgT, ObjT> fn>
-  void send(MsgSharedPtr<MsgT> msg) const;
-  template <typename MsgT, ActiveObjType<MsgT, ObjT> fn, typename... Args>
-  void send(Args&&... args) const;
-
-  template <typename... Args>
-  void update(ObjGroupReconstructTagType, Args&&... args) const;
-
-  ObjT* get() const;
-
-  ObjGroupProxyType getProxy() const { return proxy_; }
-  NodeType getNode() const { return node_; }
-
-  /*
-   * Proxy operations for releasing dependent epochs
-   */
-  bool isReleased(EpochType const& epoch);
-  void whenReleased(EpochType const& epoch, ActionType action);
-  void release(EpochType const& epoch);
-
-public:
-  template <typename SerializerT>
-  void serialize(SerializerT& s);
-
-private:
-  ObjGroupProxyType proxy_ = no_obj_group;
-  NodeType node_           = uninitialized_destination;
+template <typename ColT>
+struct CollectionMessage : RoutedMessageType<ColT> {
 };
 
-}}} /* end namespace vt::objgroup::proxy */
+}}} /* end namespace vt::vrt::collection */
 
-#endif /*INCLUDED_VT_OBJGROUP_PROXY_PROXY_OBJGROUP_ELM_H*/
+#endif /*INCLUDED_VT_VRT_COLLECTION_MESSAGES_FETCH_MSG_H*/

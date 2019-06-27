@@ -50,6 +50,8 @@
 #include "vt/objgroup/dispatch/dispatch_base.h"
 #include "vt/messaging/message/smart_ptr.h"
 
+#include <functional>
+
 namespace vt { namespace objgroup { namespace dispatch {
 
 template <typename ObjT>
@@ -59,12 +61,20 @@ struct Dispatch final : DispatchBase {
   Dispatch(Dispatch&&) = default;
 
   Dispatch(ObjGroupProxyType in_proxy, ObjT* in_obj)
-    : DispatchBase(in_proxy), obj_(in_obj)
+    : DispatchBase(
+        in_proxy,
+        std::bind(&Dispatch<ObjT>::release, this, std::placeholders::_1)
+      ),
+      obj_(in_obj)
   { }
 
   virtual ~Dispatch() = default;
 
-  void run(HandlerType han, BaseMessage* msg) override;
+  void release(MsgVirtualPtrAny msg) {
+    run(envelopeGetHandler(msg->env),msg);
+  }
+
+  void run(HandlerType han, MsgVirtualPtrAny msg) override;
 
 private:
   ObjT* obj_ = nullptr;
