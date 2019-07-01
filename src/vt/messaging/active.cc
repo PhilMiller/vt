@@ -495,7 +495,7 @@ bool ActiveMessenger::deliverActiveMsg(
 
   if (not is_any and not is_obj and epoch::EpochManip::isDep(epoch)) {
     if (not theTerm()->epochReleased(epoch)) {
-      pending_epoch_msgs_[epoch].push_back(BufferedMsgType{base,from_node});
+      pending_epoch_msgs_[epoch].push_back(BufferedMsgType{base,in_from_node});
       return false;
     }
   }
@@ -507,9 +507,9 @@ bool ActiveMessenger::deliverActiveMsg(
 
   debug_print_verbose(
     active, node,
-    "deliverActiveMsg: msg={}, ref={}, is_bcast={}, epoch={:x}\n",
+    "deliverActiveMsg: msg={}, ref={}, is_bcast={}, epoch={:x}, from={}\n",
     print_ptr(msg), envelopeGetRef(msg->env), print_bool(is_bcast),
-    epoch
+    epoch, in_from_node
   );
 
   bool has_handler = is_auto or is_functor or is_obj;
@@ -530,9 +530,9 @@ bool ActiveMessenger::deliverActiveMsg(
   debug_print_verbose(
     active, node,
     "deliverActiveMsg: msg={}, handler={:x}, tag={}, is_auto={}, "
-    "is_functor={}, is_obj_group={}, has_handler={}, insert={}\n",
+    "is_functor={}, is_obj_group={}, has_handler={}, insert={}, from={}\n",
     print_ptr(msg), handler, tag, is_auto, is_functor, is_obj,
-    has_handler, insert
+    has_handler, insert, in_from_node
   );
 
   if (has_handler) {
@@ -574,11 +574,11 @@ bool ActiveMessenger::deliverActiveMsg(
     }
 
     if (not is_term) {
-      theTerm()->consume(epoch,1,from_node);
+      theTerm()->consume(epoch,1,in_from_node);
     }
   } else {
     if (insert) {
-      pending_handler_msgs_[handler].push_back(BufferedMsgType{base,from_node});
+      pending_handler_msgs_[handler].push_back(BufferedMsgType{base,in_from_node});
     }
   }
 
