@@ -483,8 +483,8 @@ template <typename MsgT, typename BaseT>
         auto sys_msg = makeMessage<SerialWrapperMsgType<MsgT>>();
         auto send_serialized = [=](Active::SendFnType send){
           auto ret = send(RDMA_GetType{ptr, ptr_size}, dest, no_tag);
-	  EventType event = std::get<0>(ret);
-	  theEvent()->attachAction(event, [=]{ std::free(ptr); });
+          EventType event = std::get<0>(ret);
+          theEvent()->attachAction(event, [=]{ std::free(ptr); });
           sys_msg->data_recv_tag = std::get<1>(ret);
         };
         auto cur_ref = envelopeGetRef(sys_msg->env);
