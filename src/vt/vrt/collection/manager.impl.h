@@ -423,65 +423,63 @@ template <typename ColT, typename IndexT, typename MsgT>
         "broadcast: apply to element: epoch={}, bcast_epoch={}\n",
         msg->bcast_epoch_, base->cur_bcast_epoch_
       );
-      if (base->cur_bcast_epoch_ == msg->bcast_epoch_ - 1) {
-        vtAssert(base != nullptr, "Must be valid pointer");
-        base->cur_bcast_epoch_++;
 
-        #if backend_check_enabled(lblite)
-          debug_print(
-            vrt_coll, node,
-            "broadcast: apply to element: instrument={}\n",
-            msg->lbLiteInstrument()
-          );
-          if (msg->lbLiteInstrument()) {
-            recordStats(base, msg);
-            auto& stats = base->getStats();
-            stats.startTime();
-          }
+      vtAssert(base != nullptr, "Must be valid pointer");
+      base->cur_bcast_epoch_++;
 
-          // Set the current context (element ID) that is executing (having a message
-          // delivered). This is used for load balancing to build the communication
-          // graph
-          auto const elm_id = base->getElmID();
-          auto const prev_elm = theCollection()->getCurrentContext();
-          theCollection()->setCurrentContext(elm_id);
+      #if backend_check_enabled(lblite)
+        debug_print(
+          vrt_coll, node,
+          "broadcast: apply to element: instrument={}\n",
+          msg->lbLiteInstrument()
+        );
+        if (msg->lbLiteInstrument()) {
+          recordStats(base, msg);
+          auto& stats = base->getStats();
+          stats.startTime();
+        }
 
-          debug_print(
-            vrt_coll, node,
-            "collectionBcastHandler: setting current context={}\n",
-            elm_id
-          );
+        // Set the current context (element ID) that is executing (having a message
+        // delivered). This is used for load balancing to build the communication
+        // graph
+        auto const elm_id = base->getElmID();
+        auto const prev_elm = theCollection()->getCurrentContext();
+        theCollection()->setCurrentContext(elm_id);
 
-          std::unique_ptr<messaging::Listener> listener =
-            std::make_unique<balance::LBListener>(
-              [&](NodeType dest, MsgSizeType size, bool bcast){
-                auto& stats = base->getStats();
-                stats.recvToNode(dest, elm_id, size, bcast);
-              }
-            );
-          theMsg()->addSendListener(std::move(listener));
-
-        #endif
-
-        // be very careful here, do not touch `base' after running the active
-        // message because it might have migrated out and be invalid
-        auto const from = col_msg->getFromNode();
-        collectionAutoMsgDeliver<ColT,IndexT,MsgT,typename MsgT::UserMsgType>(
-          msg,base,handler,member,from
+        debug_print(
+          vrt_coll, node,
+          "collectionBcastHandler: setting current context={}\n",
+          elm_id
         );
 
-        #if backend_check_enabled(lblite)
-          theMsg()->clearListeners();
+        std::unique_ptr<messaging::Listener> listener =
+          std::make_unique<balance::LBListener>(
+            [&](NodeType dest, MsgSizeType size, bool bcast){
+              auto& stats = base->getStats();
+              stats.recvToNode(dest, elm_id, size, bcast);
+            }
+          );
+        theMsg()->addSendListener(std::move(listener));
+      #endif
 
-          // Unset the element ID context
-          theCollection()->setCurrentContext(prev_elm);
+      // be very careful here, do not touch `base' after running the active
+      // message because it might have migrated out and be invalid
+      auto const from = col_msg->getFromNode();
+      collectionAutoMsgDeliver<ColT,IndexT,MsgT,typename MsgT::UserMsgType>(
+        msg,base,handler,member,from
+      );
 
-          if (msg->lbLiteInstrument()) {
-            auto& stats = base->getStats();
-            stats.stopTime();
-          }
-        #endif
-      }
+      #if backend_check_enabled(lblite)
+        theMsg()->clearListeners();
+
+        // Unset the element ID context
+        theCollection()->setCurrentContext(prev_elm);
+
+        if (msg->lbLiteInstrument()) {
+          auto& stats = base->getStats();
+          stats.stopTime();
+        }
+      #endif
     });
   }
   /*
@@ -681,6 +679,11 @@ template <typename ColT, typename IndexT, typename MsgT>
     sub_handler, member, cur_epoch, idx, exists
   );
 
+  auto pmsg = promoteMsg(msg);
+  if (not col_ptr->release_.isReleased(cur_epoch)) {
+    col_ptr->release_.buffer(cur_epoch,pmsg);
+    return;
+  }
 
   #if backend_check_enabled(lblite)
     debug_print(
