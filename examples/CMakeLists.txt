@@ -2,6 +2,7 @@
 set(
   PROJECT_EXAMPLES_LIST
   hello_world
+  dep_epoch
   ring
   rdma_simple_get
   rdma_simple_get_direct
