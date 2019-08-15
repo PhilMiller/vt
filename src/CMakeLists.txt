@@ -44,6 +44,7 @@ set(
       pipe/callback/anon
       pipe/callback/cb_union
     termination/dijkstra-scholten
+    termination/interval
     messaging/envelope messaging/message
     pool/static_sized pool/header
     rdma/channel rdma/collection rdma/group rdma/state
@@ -61,7 +62,7 @@ set(
       vrt/collection/traits vrt/collection/defaults vrt/collection/constructor
       vrt/collection/send vrt/collection/destroy vrt/collection/broadcast
       vrt/collection/insert vrt/collection/reducable vrt/collection/mapped_node
-      vrt/collection/dispatch vrt/collection/gettable
+      vrt/collection/dispatch vrt/collection/gettable vrt/collection/release
       vrt/collection/staged_token
       vrt/collection/balance
         vrt/collection/balance/hierarchicallb
